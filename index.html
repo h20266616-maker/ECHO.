@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ÉCHO — 시대를 관통하는 패션</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #0a0a08;
+      color: #f0ece2;
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      overflow-x: hidden;
+      cursor: none;
+    }
+    #root { min-height: 100vh; }
+
+    .cursor-dot {
+      position: fixed; top: 0; left: 0; width: 8px; height: 8px;
+      background: #e8d5a3; border-radius: 50%; pointer-events: none;
+      z-index: 9999; transform: translate(-50%, -50%);
+    }
+    .cursor-ring {
+      position: fixed; top: 0; left: 0; width: 36px; height: 36px;
+      border: 1px solid rgba(232,213,163,.45); border-radius: 50%;
+      pointer-events: none; z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: width .3s, height .3s, border-color .3s;
+    }
+    .cursor-ring.hov { width: 56px; height: 56px; border-color: rgba(232,213,163,.85); }
+
+    .grain {
+      position: fixed; inset: -200%; width: 400%; height: 400%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 9000; opacity: .4;
+      animation: grain 1.4s steps(2) infinite;
+    }
+    @keyframes grain {
+      0%{transform:translate(0,0)} 25%{transform:translate(-2%,-3%)}
+      50%{transform:translate(3%,2%)} 75%{transform:translate(-1%,4%)} 100%{transform:translate(2%,-1%)}
+    }
+
+    ::-webkit-scrollbar { width: 2px; }
+    ::-webkit-scrollbar-track { background: #0a0a08; }
+    ::-webkit-scrollbar-thumb { background: #c8b89a; }
+    ::selection { background: rgba(200,184,154,.2); }
+  </style>
+</head>
+<body>
+  <div class="cursor-dot" id="cursorDot"></div>
+  <div class="cursor-ring" id="cursorRing"></div>
+  <div class="grain"></div>
+  <div id="root">
+    <div id="bootMsg" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#c8b89a;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:3px;">
+      <div style="font-family:'Playfair Display',serif;font-size:40px;font-weight:900;letter-spacing:2px;">ÉCHO</div>
+      <div id="bootText">LOADING…</div>
+    </div>
+  </div>
+
+  <script>
+    // CDN 로딩 실패 감지 — 10초 후에도 React가 없으면 안내
+    window.addEventListener('load', function(){
+      setTimeout(function(){
+        if(!window.React || !window.ReactDOM || !window.Babel){
+          var t=document.getElementById('bootText');
+          if(t) t.innerHTML='네트워크에서 라이브러리를 불러오지 못했어요.<br>새로고침(Ctrl+Shift+R)하거나 인터넷 연결을 확인해주세요.';
+        }
+      }, 10000);
+    });
+  </script>
+
+  <script type="text/babel">
+    const { useState, useRef, useMemo, useEffect } = React;
+
+    /* ── Custom cursor ── */
+    function useCursor() {
+      useEffect(() => {
+        const dot = document.getElementById('cursorDot');
+        const ring = document.getElementById('cursorRing');
+        let rx = 0, ry = 0, dx = 0, dy = 0, raf;
+        const onMove = e => { dx = e.clientX; dy = e.clientY; };
+        document.addEventListener('mousemove', onMove);
+        const onEnter = () => ring.classList.add('hov');
+        const onLeave = () => ring.classList.remove('hov');
+        const addListeners = () => {
+          document.querySelectorAll('button,a,[role=button]').forEach(el => {
+            el.addEventListener('mouseenter', onEnter);
+            el.addEventListener('mouseleave', onLeave);
+          });
+        };
+        addListeners();
+        const obs = new MutationObserver(addListeners);
+        obs.observe(document.body, { childList: true, subtree: true });
+        const tick = () => {
+          rx += (dx - rx) * .12; ry += (dy - ry) * .12;
+          dot.style.left = dx + 'px'; dot.style.top = dy + 'px';
+          ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+          raf = requestAnimationFrame(tick);
+        };
+        tick();
+        return () => { document.removeEventListener('mousemove', onMove); cancelAnimationFrame(raf); obs.disconnect(); };
+      }, []);
+    }
+
+    /* ── Era definitions ── */
+    const ERAS = [
+      {
+        id: '1920s', label: '1920s', ko: '재즈 시대',
+        palette: ['#c9a96e','#2b1f14','#d4c5a9','#8b6914','#f2e8d0'],
+        accent: '#c9a96e',
+        bg: 'linear-gradient(160deg,#1a1208 0%,#0d0b06 60%,#1f1710 100%)',
+        keywords: ['아르데코','플래퍼','비딩','드롭웨이스트','클로슈햇'],
+        desc: '재즈의 리듬에 맞춰 여성들이 처음으로 짧은 치마를 입었던 해방의 시대. 아르데코의 기하학적 패턴, 비즈 장식의 플래퍼 드레스, 클로슈 햇이 20년대를 상징했다.',
+        looks: [
+          { name: 'Flapper Beaded Dress', cat: 'dress', sil: 'dress', hex: '#2b1f14', tags: ['vintage','romantic'], ar: 1.6 },
+          { name: 'Art Deco Evening Gown', cat: 'dress', sil: 'dress', hex: '#c9a96e', tags: ['vintage','tailored'], ar: 1.65 },
+          { name: 'Drop Waist Tunic', cat: 'top', sil: 'tee', hex: '#d4c5a9', tags: ['vintage','minimal'], ar: 1.2 },
+          { name: 'Cloche Hat Coat', cat: 'outerwear', sil: 'coat', hex: '#4a3b28', tags: ['vintage','tailored'], ar: 1.4 },
+          { name: 'T-Strap Heel', cat: 'shoes', sil: 'shoe', hex: '#8b6914', tags: ['vintage','romantic'], ar: 1.0 },
+          { name: 'Satin Evening Bag', cat: 'bag', sil: 'bag', hex: '#c9a96e', tags: ['vintage','romantic'], ar: 1.05 },
+        ],
+      },
+      {
+        id: '1950s', label: '1950s', ko: '뉴룩의 시대',
+        palette: ['#c24b6e','#f0d8e0','#2c2c3c','#e8a0b4','#f5ede8'],
+        accent: '#c24b6e',
+        bg: 'linear-gradient(160deg,#18080e 0%,#0e0a12 60%,#1a0a10 100%)',
+        keywords: ['뉴룩','풀스커트','핀치드웨이스트','페티코트','스틸레토'],
+        desc: '크리스티앙 디올의 뉴룩이 세상을 바꿨다. 허리를 강조하고 치마를 부풀린 페미닌의 절정. 오드리 헵번과 마릴린 먼로가 상반된 아름다움으로 시대를 지배했다.',
+        looks: [
+          { name: 'Circle Skirt', cat: 'bottom', sil: 'skirt', hex: '#c24b6e', tags: ['romantic','vintage'], ar: 1.4 },
+          { name: 'Fit & Flare Dress', cat: 'dress', sil: 'dress', hex: '#e8a0b4', tags: ['romantic','preppy'], ar: 1.6 },
+          { name: 'Pencil Skirt', cat: 'bottom', sil: 'skirt', hex: '#2c2c3c', tags: ['tailored','minimal'], ar: 1.35 },
+          { name: 'Cropped Cardigan', cat: 'knitwear', sil: 'knit', hex: '#f0d8e0', tags: ['preppy','romantic'], ar: 1.2 },
+          { name: 'Kitten Heel', cat: 'shoes', sil: 'shoe', hex: '#c24b6e', tags: ['romantic','vintage'], ar: 1.0 },
+          { name: 'Structured Kelly Bag', cat: 'bag', sil: 'bag', hex: '#2c2c3c', tags: ['tailored','minimal'], ar: 1.05 },
+        ],
+      },
+      {
+        id: '1960s', label: '1960s', ko: '모드 혁명',
+        palette: ['#f5d800','#f54040','#1060f0','#1a1a1a','#f0f0f0'],
+        accent: '#f5d800',
+        bg: 'linear-gradient(160deg,#0e0e06 0%,#0a0a08 60%,#12100a 100%)',
+        keywords: ['모드룩','미니스커트','팝아트','고고부츠','오프화이트'],
+        desc: '트위기와 마리 퀀트가 패션에 혁명을 일으켰다. 미니스커트와 기하학 프린트, 팝아트 컬러가 젊음의 반란을 선언했다.',
+        looks: [
+          { name: 'Mod Mini Dress', cat: 'dress', sil: 'dress', hex: '#1a1a1a', tags: ['minimal','edgy'], ar: 1.4 },
+          { name: 'Geometric Print Shift', cat: 'dress', sil: 'dress', hex: '#f5d800', tags: ['vintage','streetwear'], ar: 1.45 },
+          { name: 'Go-Go Boot', cat: 'shoes', sil: 'shoe', hex: '#f0f0f0', tags: ['edgy','vintage'], ar: 1.05 },
+          { name: 'A-Line Skirt', cat: 'bottom', sil: 'skirt', hex: '#f54040', tags: ['vintage','preppy'], ar: 1.3 },
+          { name: 'Turtleneck', cat: 'top', sil: 'tee', hex: '#1a1a1a', tags: ['minimal','monochrome'], ar: 1.15 },
+          { name: 'Chain Handle Bag', cat: 'bag', sil: 'bag', hex: '#f5d800', tags: ['vintage','edgy'], ar: 1.0 },
+        ],
+      },
+      {
+        id: '1970s', label: '1970s', ko: '보헤미안 혁명',
+        palette: ['#c4782a','#7a5c3a','#d4a857','#8b4513','#f2ddb5'],
+        accent: '#d4a857',
+        bg: 'linear-gradient(160deg,#120d06 0%,#0d0a04 60%,#1a1208 100%)',
+        keywords: ['디스코','플레어팬츠','보헤미안','플랫폼슈즈','프린지'],
+        desc: '자유와 반항의 시대. 플레어 팬츠와 프린지, 보헤미안 드레스가 해방감을 표현했다. 디스코의 화려함과 히피의 자연주의가 공존했다.',
+        looks: [
+          { name: 'Flared Trousers', cat: 'bottom', sil: 'pants', hex: '#7a5c3a', tags: ['boho','vintage'], ar: 1.5 },
+          { name: 'Fringe Suede Jacket', cat: 'outerwear', sil: 'coat', hex: '#c4782a', tags: ['boho','edgy'], ar: 1.45 },
+          { name: 'Wrap Maxi Dress', cat: 'dress', sil: 'dress', hex: '#d4a857', tags: ['boho','romantic'], ar: 1.65 },
+          { name: 'Platform Boot', cat: 'shoes', sil: 'shoe', hex: '#8b4513', tags: ['edgy','vintage'], ar: 1.05 },
+          { name: 'Peasant Blouse', cat: 'top', sil: 'tee', hex: '#f2ddb5', tags: ['boho','romantic'], ar: 1.2 },
+          { name: 'Macramé Bag', cat: 'bag', sil: 'bag', hex: '#c4782a', tags: ['boho','vintage'], ar: 1.1 },
+        ],
+      },
+      {
+        id: '1980s', label: '1980s', ko: '파워드레싱',
+        palette: ['#d4145a','#1a1a8c','#f5f500','#ff6b35','#2a0a2a'],
+        accent: '#d4145a',
+        bg: 'linear-gradient(160deg,#0a0014 0%,#080010 60%,#14000a 100%)',
+        keywords: ['파워숄더','네온','펑크','오버사이즈','로고매니아'],
+        desc: '과잉의 미학. 어깨를 높이 올리고 원색과 네온으로 존재를 과시한 권력의 패션. 아르마니의 파워 수트와 베르사체의 화려함이 시대를 지배했다.',
+        looks: [
+          { name: 'Power Shoulder Blazer', cat: 'outerwear', sil: 'coat', hex: '#1a1a8c', tags: ['tailored','edgy'], ar: 1.45 },
+          { name: 'Neon Mini Skirt', cat: 'bottom', sil: 'skirt', hex: '#d4145a', tags: ['edgy','streetwear'], ar: 1.25 },
+          { name: 'Oversized Sweatshirt', cat: 'top', sil: 'knit', hex: '#f5f500', tags: ['streetwear','athleisure'], ar: 1.3 },
+          { name: 'Spandex Leggings', cat: 'bottom', sil: 'pants', hex: '#2a0a2a', tags: ['athleisure','edgy'], ar: 1.4 },
+          { name: 'Ankle Boot with Buckle', cat: 'shoes', sil: 'shoe', hex: '#1a1a8c', tags: ['edgy','streetwear'], ar: 1.05 },
+          { name: 'Chain Shoulder Bag', cat: 'bag', sil: 'bag', hex: '#d4145a', tags: ['edgy','tailored'], ar: 1.0 },
+        ],
+      },
+      {
+        id: '1990s', label: '1990s', ko: '미니멀과 그런지',
+        palette: ['#3a3a3a','#c8c8c8','#8b0000','#4a4a6a','#f0f0f0'],
+        accent: '#c8c8c8',
+        bg: 'linear-gradient(160deg,#080808 0%,#0c0c0c 60%,#080c10 100%)',
+        keywords: ['그런지','슬립드레스','헤로인시크','플란넬','닥터마틴'],
+        desc: '반(反)패션이 곧 패션이 된 시대. 케이트 모스의 헤로인 시크부터 켈빈 클라인의 극단적 미니멀까지. 쿠르트 코베인의 플란넬이 고급 패션이 되었다.',
+        looks: [
+          { name: 'Slip Satin Dress', cat: 'dress', sil: 'dress', hex: '#4a4a6a', tags: ['minimal','romantic'], ar: 1.6 },
+          { name: 'Flannel Overshirt', cat: 'outerwear', sil: 'coat', hex: '#8b0000', tags: ['streetwear','vintage'], ar: 1.4 },
+          { name: 'High-Waist Jeans', cat: 'bottom', sil: 'pants', hex: '#4a6a8a', tags: ['minimal','streetwear'], ar: 1.45 },
+          { name: 'Band Tee', cat: 'top', sil: 'tee', hex: '#1a1a1a', tags: ['streetwear','edgy'], ar: 1.1 },
+          { name: 'Platform Oxford', cat: 'shoes', sil: 'shoe', hex: '#3a3a3a', tags: ['edgy','vintage'], ar: 1.0 },
+          { name: 'Mini Backpack', cat: 'bag', sil: 'bag', hex: '#c8c8c8', tags: ['streetwear','minimal'], ar: 1.05 },
+        ],
+      },
+      {
+        id: '2000s', label: '2000s', ko: 'Y2K 패션',
+        palette: ['#ff69b4','#00bfff','#c0c0c0','#c0a0e0','#ffe066'],
+        accent: '#ff69b4',
+        bg: 'linear-gradient(160deg,#0a0014 0%,#080018 60%,#140014 100%)',
+        keywords: ['Y2K','로우라이즈','카고팬츠','벨루어','로고매니아'],
+        desc: '밀레니엄 버그보다 강렬했던 패션. 저스틴과 브리트니의 데님온데님부터 파리스 힐튼의 핑크 벨루어까지. 반짝이는 모든 것이 아름다웠다.',
+        looks: [
+          { name: 'Low Rise Cargo Pants', cat: 'bottom', sil: 'pants', hex: '#586147', tags: ['streetwear','edgy'], ar: 1.5 },
+          { name: 'Velour Tracksuit Top', cat: 'top', sil: 'knit', hex: '#c0a0e0', tags: ['athleisure','streetwear'], ar: 1.3 },
+          { name: 'Butterfly Crop Top', cat: 'top', sil: 'tee', hex: '#ff69b4', tags: ['romantic','streetwear'], ar: 1.1 },
+          { name: 'Denim Mini Skirt', cat: 'bottom', sil: 'skirt', hex: '#5b6e88', tags: ['streetwear','vintage'], ar: 1.2 },
+          { name: 'Platform Mule', cat: 'shoes', sil: 'shoe', hex: '#c0c0c0', tags: ['streetwear','edgy'], ar: 1.0 },
+          { name: 'Micro Monogram Bag', cat: 'bag', sil: 'bag', hex: '#c8a04a', tags: ['streetwear','preppy'], ar: 1.0 },
+        ],
+      },
+      {
+        id: '2010s', label: '2010s', ko: '노멀코어 & 스트릿',
+        palette: ['#2a2a2a','#e8e0d0','#c8b89a','#404040','#ffffff'],
+        accent: '#e8e0d0',
+        bg: 'linear-gradient(160deg,#0a0a0a 0%,#0c0c0c 60%,#080808 100%)',
+        keywords: ['노멀코어','애슬레저','하이프비스트','오버사이즈','스니커헤드'],
+        desc: '인스타그램이 패션을 바꿨다. 하이엔드와 스트릿의 경계가 무너지고 스니커 문화가 지배했다. 버질 아블로와 킴 존스가 럭셔리 스트릿의 시대를 열었다.',
+        looks: [
+          { name: 'Oversized Hoodie', cat: 'top', sil: 'knit', hex: '#2a2a2a', tags: ['streetwear','athleisure'], ar: 1.3 },
+          { name: 'High Rise Skinny Jean', cat: 'bottom', sil: 'pants', hex: '#1a2a3a', tags: ['minimal','streetwear'], ar: 1.5 },
+          { name: 'Bomber Jacket', cat: 'outerwear', sil: 'coat', hex: '#2a4a2a', tags: ['streetwear','athleisure'], ar: 1.35 },
+          { name: 'Normcore White Tee', cat: 'top', sil: 'tee', hex: '#f0f0f0', tags: ['minimal','monochrome'], ar: 1.1 },
+          { name: 'Chunky Sneaker', cat: 'shoes', sil: 'shoe', hex: '#e8e0d0', tags: ['streetwear','athleisure'], ar: 1.0 },
+          { name: 'Fanny Pack', cat: 'bag', sil: 'bag', hex: '#1a1a1a', tags: ['streetwear','athleisure'], ar: 0.9 },
+        ],
+      },
+      {
+        id: '2020s', label: '2020s', ko: '콰이어트 럭셔리',
+        palette: ['#c8b89a','#8a7a68','#1a1814','#e8e0d0','#6a5c4a'],
+        accent: '#c8b89a',
+        bg: 'linear-gradient(160deg,#0e0d0a 0%,#0a0908 60%,#120f0c 100%)',
+        keywords: ['콰이어트럭셔리','코티지코어','도파민드레싱','Y2K리바이벌','뉴미니멀'],
+        desc: '로고 없이 말하는 부의 언어. 브루넬로 쿠치넬리와 더 로우가 지배하는 무소음 럭셔리의 시대. 노 로고, 프리미엄 소재, 절제된 실루엣.',
+        looks: [
+          { name: 'Cashmere Coat', cat: 'outerwear', sil: 'coat', hex: '#c8b89a', tags: ['minimal','tailored'], ar: 1.55 },
+          { name: 'Wide Leg Trouser', cat: 'bottom', sil: 'pants', hex: '#8a7a68', tags: ['tailored','minimal'], ar: 1.5 },
+          { name: 'Silk Camisole', cat: 'top', sil: 'tee', hex: '#e8e0d0', tags: ['minimal','romantic'], ar: 1.15 },
+          { name: 'Cashmere Knit', cat: 'knitwear', sil: 'knit', hex: '#6a5c4a', tags: ['minimal','monochrome'], ar: 1.3 },
+          { name: 'Ballet Flat', cat: 'shoes', sil: 'shoe', hex: '#c8b89a', tags: ['minimal','romantic'], ar: 1.0 },
+          { name: 'Minimal Shoulder Bag', cat: 'bag', sil: 'bag', hex: '#1a1814', tags: ['minimal','tailored'], ar: 1.05 },
+        ],
+      },
+    ];
+
+    /* ── Style/cat vocab ── */
+    const STYLE_KO = {
+      minimal:'미니멀', streetwear:'스트릿', vintage:'빈티지',
+      romantic:'로맨틱', tailored:'테일러드', athleisure:'애슬레저',
+      boho:'보헤미안', edgy:'엣지', preppy:'프레피', monochrome:'모노크롬',
+    };
+    const CAT_KO = {
+      top:'상의', bottom:'하의', dress:'드레스', outerwear:'아우터',
+      knitwear:'니트', shoes:'슈즈', bag:'백', accessory:'액세서리',
+    };
+    const ADJACENT = {
+      top:['knitwear','dress'], knitwear:['top','outerwear'], outerwear:['knitwear','top'],
+      bottom:['dress'], dress:['top','bottom'], shoes:['accessory'],
+      bag:['accessory'], accessory:['bag','shoes'],
+    };
+
+    /* ── Catalog ── */
+    let _uid = 100;
+    const CATALOG = ERAS.flatMap(era =>
+      era.looks.map(l => ({ ...l, id: _uid++, era: era.id }))
+    );
+
+    /* ── Color utils ── */
+    function hexToRgb(h) {
+      const n = parseInt(h.replace('#',''), 16);
+      return [(n>>16)&255, (n>>8)&255, n&255];
+    }
+    function colorDist(a, b) {
+      const [r1,g1,b1]=hexToRgb(a), [r2,g2,b2]=hexToRgb(b);
+      return Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
+    }
+    const MAX_DIST = 441.67;
+    function tint(hex) {
+      const [r,g,b] = hexToRgb(hex);
+      return `rgb(${Math.round(r*.55+12)},${Math.round(g*.52+10)},${Math.round(b*.5+8)})`;
+    }
+
+    function scoreItem(item, profile) {
+      const ts = item.tags.filter(t=>profile.tags.includes(t)).length / Math.max(1,Math.min(3,profile.tags.length));
+      let cs = 0;
+      if(profile.cats.includes(item.cat)) cs=1;
+      else if(profile.cats.some(c=>(ADJACENT[c]||[]).includes(item.cat))) cs=0.4;
+      let cols = 0.5;
+      if(profile.colors.length){
+        const near = Math.min(...profile.colors.map(c=>colorDist(c,item.hex)));
+        cols = 1 - near/MAX_DIST;
+      }
+      return Math.round((ts*.55+cs*.2+cols*.25)*100);
+    }
+
+    /* ── SVG Garment ── */
+    function Garment({sil, hex}) {
+      const stroke = 'rgba(255,255,255,0.15)';
+      const p = {fill:hex, stroke, strokeWidth:2, strokeLinejoin:'round', strokeLinecap:'round'};
+      const paths = {
+        tee:   <path {...p} d="M35 28 L52 18 Q60 26 60 26 L75 16 L90 30 L80 44 L72 38 L72 96 Q60 100 40 96 L40 38 L32 44 Z"/>,
+        knit:  <path {...p} d="M30 30 L48 20 L60 26 L72 20 L90 30 L82 50 L74 44 L74 98 Q60 102 46 98 L46 44 L38 50 Z"/>,
+        coat:  <path {...p} d="M32 26 L50 18 L60 24 L70 18 L88 26 L82 52 L74 48 L74 102 L60 100 L60 50 L60 100 L46 102 L46 48 L38 52 Z"/>,
+        pants: <path {...p} d="M40 20 L80 20 L80 36 L74 102 L62 102 L60 56 L58 102 L46 102 L40 36 Z"/>,
+        skirt: <path {...p} d="M42 22 L78 22 L80 36 L92 100 Q60 108 28 100 L40 36 Z"/>,
+        dress: <path {...p} d="M40 18 L52 14 L60 20 L68 14 L80 18 L74 40 L72 50 L90 102 Q60 110 30 102 L48 50 L46 40 Z"/>,
+        shoe:  <path {...p} d="M22 60 L70 60 Q92 60 96 76 L96 84 L20 84 Q16 84 16 76 L18 64 Z"/>,
+        bag:   <path {...p} d="M34 44 L86 44 L92 100 L28 100 Z M44 44 Q44 24 60 24 Q76 24 76 44" fill={hex}/>,
+      };
+      const gid = `g${hex.replace('#','')}`;
+      return (
+        <svg viewBox="0 0 120 120" width="100%" height="100%" style={{display:'block'}}>
+          <defs>
+            <radialGradient id={gid} cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.18)"/>
+              <stop offset="100%" stopColor="rgba(0,0,0,0.3)"/>
+            </radialGradient>
+          </defs>
+          {paths[sil] || paths.tee}
+          <rect x="0" y="0" width="120" height="120" fill={`url(#${gid})`} style={{mixBlendMode:'overlay'}}/>
+        </svg>
+      );
+    }
+
+    /* ── Scroll reveal ── */
+    function RevealSection({children, delay=0, style={}}) {
+      const ref = useRef(null);
+      const [v, setV] = useState(false);
+      useEffect(() => {
+        const obs = new IntersectionObserver(([e])=>{if(e.isIntersecting)setV(true)},{threshold:.12});
+        if(ref.current) obs.observe(ref.current);
+        return ()=>obs.disconnect();
+      }, []);
+      return (
+        <div ref={ref} style={{
+          opacity:v?1:0, transform:v?'none':'translateY(36px)',
+          transition:`opacity .9s ease ${delay}ms, transform .9s cubic-bezier(.22,.61,.36,1) ${delay}ms`,
+          ...style,
+        }}>{children}</div>
+      );
+    }
+
+    /* ── Marquee ── */
+    function Marquee() {
+      const txt = ['ÉCHO','·','패션 아카이브','·','1920s — 2020s','·','ERA FASHION','·','스타일 탐색','·','DISCOVER YOUR ERA','·'].join('  ');
+      return (
+        <div style={{overflow:'hidden',borderTop:'1px solid rgba(255,255,255,.06)',borderBottom:'1px solid rgba(255,255,255,.06)',padding:'10px 0',background:'rgba(255,255,255,.015)'}}>
+          <div style={{display:'flex',gap:'2em',animation:'mq 30s linear infinite',width:'max-content',fontFamily:"'DM Mono',monospace",fontSize:10,letterSpacing:'2px',color:'rgba(240,236,226,.25)'}}>
+            {[...Array(5)].map((_,i)=><span key={i}>{txt}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>)}
+          </div>
+          <style>{`@keyframes mq{from{transform:translateX(0)}to{transform:translateX(-20%)}}`}</style>
+        </div>
+      );
+    }
+
+    /* ── Item Card ── */
+    function ItemCard({item, onClick, match}) {
+      const [hov, setHov] = useState(false);
+      const era = ERAS.find(e=>e.id===item.era);
+      const h = Math.round(136 * item.ar);
+      return (
+        <button
+          onClick={()=>onClick(item)}
+          onMouseEnter={()=>setHov(true)}
+          onMouseLeave={()=>setHov(false)}
+          style={{
+            display:'inline-block',width:'100%',breakInside:'avoid',margin:'0 0 16px',
+            background:'none',border:'none',padding:0,textAlign:'left',cursor:'none',
+            transform:hov?'translateY(-6px)':'none',
+            transition:'transform .4s cubic-bezier(.22,.61,.36,1)',
+          }}>
+          <div style={{
+            position:'relative',borderRadius:'2px',overflow:'hidden',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            height:h, background:tint(item.hex),
+            border:'1px solid rgba(255,255,255,0.05)',
+          }}>
+            <div style={{width:'58%',height:'58%',transform:hov?'scale(1.09)':'none',transition:'transform .5s ease'}}>
+              <Garment sil={item.sil} hex={item.hex}/>
+            </div>
+            {match!=null&&(
+              <span style={{position:'absolute',top:8,left:8,background:'rgba(232,213,163,.95)',color:'#0a0a08',fontFamily:"'DM Mono',monospace",fontSize:'9px',letterSpacing:'.5px',padding:'3px 8px',borderRadius:20,fontWeight:600}}>
+                {match}% 매칭
+              </span>
+            )}
+            {!match&&era&&(
+              <span style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,.65)',color:era.accent,fontFamily:"'DM Mono',monospace",fontSize:'9px',letterSpacing:1,padding:'3px 8px',borderRadius:20}}>
+                {item.era}
+              </span>
+            )}
+            <span style={{position:'absolute',bottom:8,right:8,width:12,height:12,borderRadius:'50%',background:item.hex,border:'2px solid rgba(255,255,255,.35)',boxShadow:'0 1px 6px rgba(0,0,0,.5)'}}/>
+            <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,.55) 0%,transparent 55%)',opacity:hov?1:0,transition:'opacity .35s'}}/>
+          </div>
+          <div style={{padding:'8px 1px 0'}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:14,fontWeight:600,color:'#f0ece2',lineHeight:1.2}}>{item.name}</div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:5,alignItems:'center'}}>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:era?.accent||'#c8b89a',letterSpacing:'.5px'}}>{CAT_KO[item.cat]}</span>
+              {item.tags.map(t=>(
+                <span key={t} style={{fontSize:'10px',color:'rgba(240,236,226,.4)',fontFamily:"'Noto Sans KR'"}}>{STYLE_KO[t]}</span>
+              ))}
+            </div>
+          </div>
+        </button>
+      );
+    }
+
+    /* ── Era Card (horizontal scroll) ── */
+    function EraCard({era, onSelect, active}) {
+      const [hov, setHov] = useState(false);
+      return (
+        <button
+          onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+          onClick={()=>onSelect(era.id)}
+          style={{background:'none',border:'none',cursor:'none',textAlign:'left',padding:0,flex:'0 0 auto',width:210}}>
+          <div style={{
+            height:300,borderRadius:'2px',overflow:'hidden',position:'relative',
+            background:era.bg,
+            border:`1px solid ${active?era.accent:'rgba(255,255,255,0.07)'}`,
+            transition:'border-color .3s, transform .4s cubic-bezier(.22,.61,.36,1)',
+            transform:hov?'scale(1.025)':'none',
+          }}>
+            <div style={{position:'absolute',bottom:0,left:0,right:0,display:'flex',height:3}}>
+              {era.palette.map((c,i)=><div key={i} style={{flex:1,background:c}}/>)}
+            </div>
+            <div style={{
+              position:'absolute',top:'50%',left:'50%',
+              transform:`translate(-50%,-56%) scale(${hov?1.1:1})`,
+              transition:'transform .5s ease',
+              width:80,height:100,
+            }}>
+              <Garment sil={era.looks[0].sil} hex={era.palette[0]}/>
+            </div>
+            <div style={{position:'absolute',top:16,left:16}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'3px',color:era.accent,marginBottom:5}}>{era.label}</div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:'#f0ece2',lineHeight:1.1}}>{era.ko}</div>
+            </div>
+            {active&&<div style={{position:'absolute',top:14,right:14,width:7,height:7,borderRadius:'50%',background:era.accent,boxShadow:`0 0 14px ${era.accent}`}}/>}
+            <div style={{position:'absolute',inset:0,background:'linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.4))',opacity:hov?1:0,transition:'opacity .3s'}}/>
+          </div>
+          <div style={{marginTop:10,paddingLeft:1,display:'flex',gap:5,flexWrap:'wrap'}}>
+            {era.keywords.slice(0,2).map(k=>(
+              <span key={k} style={{fontFamily:"'Noto Sans KR'",fontSize:'10px',color:'rgba(240,236,226,.35)',borderBottom:'1px solid rgba(240,236,226,.15)',paddingBottom:1}}>{k}</span>
+            ))}
+          </div>
+        </button>
+      );
+    }
+
+    /* ── Main App ── */
+    export default function App() {
+      useCursor();
+      const [activeEra, setActiveEra] = useState(null);
+      const [profile, setProfile] = useState(null);
+      const [uploadedImg, setUploadedImg] = useState(null);
+      const [analyzing, setAnalyzing] = useState(false);
+      const [error, setError] = useState(null);
+      const [view, setView] = useState('home'); // home | era | match
+      const fileRef = useRef(null);
+      const contentRef = useRef(null);
+
+      const currentEra = useMemo(()=>ERAS.find(e=>e.id===activeEra),[activeEra]);
+      const matches = useMemo(()=>{
+        if(!profile) return [];
+        return CATALOG
+          .map(i=>({item:i, score:scoreItem(i,profile)}))
+          .filter(x=>x.score>15)
+          .sort((a,b)=>b.score-a.score)
+          .slice(0,12);
+      },[profile]);
+
+      function selectEra(id) {
+        setActiveEra(id); setView('era'); setProfile(null);
+        setTimeout(()=>contentRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),80);
+      }
+      function pickItem(item) {
+        const era = ERAS.find(e=>e.id===item.era);
+        setError(null);
+        setProfile({tags:item.tags,cats:[item.cat],colors:[item.hex],sourceId:item.id,
+          vibe:item.name,img:null,swatches:[item.hex],accent:era?.accent||'#c8b89a'});
+        setView('match');
+        setTimeout(()=>contentRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),80);
+      }
+      function goHome() { setView('home'); setActiveEra(null); setProfile(null); setUploadedImg(null); setError(null); }
+
+      async function onUpload(e) {
+        const file = e.target.files?.[0];
+        if(!file) return;
+        setError(null);
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = reader.result;
+          const base64 = dataUrl.split(',')[1];
+          setUploadedImg(dataUrl);
+          setAnalyzing(true);
+          try {
+            const sys = `You are a fashion historian. Analyze the outfit in the image. Respond ONLY with valid JSON:
+{"vibe":"Korean phrase max 8 words","era":"1920s|1950s|1960s|1970s|1980s|1990s|2000s|2010s|2020s","styleTags":["1-3 from: minimal,streetwear,vintage,romantic,tailored,athleisure,boho,edgy,preppy,monochrome"],"categories":["1-3 from: top,bottom,dress,outerwear,knitwear,shoes,bag,accessory"],"colors":["1-3 dominant hex codes"]}`;
+            const res = await fetch('https://api.anthropic.com/v1/messages',{
+              method:'POST',
+              headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01'},
+              body:JSON.stringify({
+                model:'claude-sonnet-4-20250514',max_tokens:800,system:sys,
+                messages:[{role:'user',content:[
+                  {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
+                  {type:'text',text:'이 패션 이미지를 분석해줘.'},
+                ]}],
+              }),
+            });
+            const data = await res.json();
+            const text = (data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+            const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+            const tags = (parsed.styleTags||[]).filter(t=>STYLE_KO[t]);
+            const cats = (parsed.categories||[]).filter(c=>CAT_KO[c]);
+            const colors = (parsed.colors||[]).filter(c=>/^#[0-9a-fA-F]{6}$/.test(c));
+            const era = ERAS.find(e=>e.id===parsed.era)||ERAS[6];
+            setProfile({
+              tags:tags.length?tags:['minimal'], cats:cats.length?cats:['top'],
+              colors:colors.length?colors:['#aaaaaa'],
+              sourceId:-1, vibe:parsed.vibe||'분석된 스타일', img:dataUrl,
+              swatches:colors, accent:era.accent,
+            });
+            setView('match');
+            setTimeout(()=>contentRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),80);
+          } catch(err) {
+            setError('이미지 분석에 실패했어요. API 키가 필요하거나 네트워크 오류입니다.');
+          } finally {
+            setAnalyzing(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      return (
+        <div style={{minHeight:'100vh',background:'#0a0a08',paddingBottom:100}}>
+
+          {/* ── Header ── */}
+          <header style={{
+            position:'sticky',top:0,zIndex:100,
+            display:'flex',justifyContent:'space-between',alignItems:'center',
+            padding:'16px 44px',
+            background:'rgba(10,10,8,.94)',backdropFilter:'blur(24px)',
+            borderBottom:'1px solid rgba(255,255,255,.05)',
+          }}>
+            <button onClick={goHome} style={{background:'none',border:'none',cursor:'none',padding:0,display:'flex',alignItems:'baseline',gap:14}}>
+              <span style={{fontFamily:"'Playfair Display',serif",fontWeight:900,fontSize:24,color:'#f0ece2',letterSpacing:2}}>ÉCHO</span>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:'3px',color:'rgba(240,236,226,.3)'}}>FASHION ARCHIVE</span>
+            </button>
+            <nav style={{display:'flex',gap:24,alignItems:'center',flexWrap:'wrap'}}>
+              {ERAS.map(era=>(
+                <button key={era.id} onClick={()=>selectEra(era.id)} style={{
+                  background:'none',border:'none',cursor:'none',padding:'3px 0',
+                  fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'2px',
+                  color:activeEra===era.id?era.accent:'rgba(240,236,226,.3)',
+                  borderBottom:activeEra===era.id?`1px solid ${era.accent}`:'1px solid transparent',
+                  transition:'color .2s,border-color .2s',
+                }}>{era.label}</button>
+              ))}
+            </nav>
+          </header>
+
+          <Marquee/>
+
+          {/* ── HOME VIEW ── */}
+          {view==='home'&&(
+            <>
+              {/* Hero */}
+              <section style={{padding:'90px 44px 70px',maxWidth:1300,margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 1fr',gap:60,alignItems:'center'}}>
+                <div>
+                  <RevealSection>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'5px',color:'rgba(200,184,154,.45)',marginBottom:22}}>1920 — 2020</div>
+                    <h1 style={{fontFamily:"'Playfair Display',serif",fontWeight:900,fontSize:'clamp(50px,6.5vw,90px)',lineHeight:.94,color:'#f0ece2',letterSpacing:-2,marginBottom:28}}>
+                      시대를<br/><em style={{fontStyle:'italic',color:'#c8b89a'}}>관통</em>하는<br/>패션
+                    </h1>
+                    <p style={{fontFamily:"'Noto Sans KR'",fontSize:13.5,lineHeight:1.9,color:'rgba(240,236,226,.5)',maxWidth:400,marginBottom:34}}>
+                      1920년대 재즈 시대부터 2020년대 콰이어트 럭셔리까지.<br/>
+                      100년의 패션 역사를 탐색하고 당신의 스타일을 발견하세요.
+                    </p>
+                    <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                      <Btn primary onClick={()=>document.getElementById('eras')?.scrollIntoView({behavior:'smooth'})}>시대 탐색하기</Btn>
+                      <Btn onClick={()=>fileRef.current?.click()}>이미지 분석</Btn>
+                      <input ref={fileRef} type="file" accept="image/*" onChange={onUpload} hidden/>
+                    </div>
+                    {analyzing&&(
+                      <div style={{marginTop:18,display:'flex',alignItems:'center',gap:10}}>
+                        <Spinner/><span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:'rgba(240,236,226,.4)',letterSpacing:2}}>스타일 분석 중…</span>
+                      </div>
+                    )}
+                    {error&&<p style={{marginTop:14,color:'#e08070',fontFamily:"'Noto Sans KR'",fontSize:12,lineHeight:1.7}}>{error}</p>}
+                  </RevealSection>
+                </div>
+
+                {/* Floating garments */}
+                <div style={{position:'relative',height:480}}>
+                  {ERAS.slice(0,4).map((era,i)=>{
+                    const look = era.looks[i%era.looks.length];
+                    const W = 140+i*10;
+                    const H = Math.round(W*look.ar);
+                    return (
+                      <div key={era.id} style={{
+                        position:'absolute',
+                        top:`${[2,22,44,16][i]}%`,left:`${[0,35,8,52][i]}%`,
+                        width:W,height:H,
+                        background:tint(era.palette[0]),
+                        border:'1px solid rgba(255,255,255,.06)',borderRadius:2,
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        animation:`fl${i} ${3.2+i*.9}s ease-in-out infinite`,
+                        boxShadow:'0 24px 60px rgba(0,0,0,.7)',
+                      }}>
+                        <div style={{width:'58%',height:'58%'}}>
+                          <Garment sil={look.sil} hex={era.palette[0]}/>
+                        </div>
+                        <span style={{position:'absolute',bottom:7,right:7,fontFamily:"'DM Mono',monospace",fontSize:'8px',color:era.accent,letterSpacing:1}}>{era.label}</span>
+                      </div>
+                    );
+                  })}
+                  <style>{`
+                    @keyframes fl0{0%,100%{transform:translateY(0) rotate(-2.5deg)}50%{transform:translateY(-14px) rotate(-2.5deg)}}
+                    @keyframes fl1{0%,100%{transform:translateY(0) rotate(1.8deg)}50%{transform:translateY(-18px) rotate(1.8deg)}}
+                    @keyframes fl2{0%,100%{transform:translateY(0) rotate(-1.2deg)}50%{transform:translateY(-11px) rotate(-1.2deg)}}
+                    @keyframes fl3{0%,100%{transform:translateY(0) rotate(2.2deg)}50%{transform:translateY(-16px) rotate(2.2deg)}}
+                    @keyframes spin{to{transform:rotate(360deg)}}
+                    @keyframes fI{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+                  `}</style>
+                </div>
+              </section>
+
+              {/* Stats row */}
+              <RevealSection style={{maxWidth:1300,margin:'0 auto',padding:'0 44px 80px'}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',borderTop:'1px solid rgba(255,255,255,.06)',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
+                  {[{n:'9',d:'시대별 아카이브',s:'1920s — 2020s'},{n:'54+',d:'큐레이션 룩',s:'각 시대 대표 스타일'},{n:'AI',d:'스타일 분석',s:'이미지로 닮은 옷 찾기'}].map((f,i)=>(
+                    <div key={i} style={{padding:'36px 32px',borderRight:i<2?'1px solid rgba(255,255,255,.06)':'none',background:'rgba(255,255,255,.01)'}}>
+                      <div style={{fontFamily:"'Playfair Display',serif",fontSize:50,fontWeight:900,color:'#c8b89a',marginBottom:6}}>{f.n}</div>
+                      <div style={{fontFamily:"'Noto Sans KR'",fontSize:15,color:'#f0ece2',marginBottom:4}}>{f.d}</div>
+                      <div style={{fontFamily:"'Noto Sans KR'",fontSize:11,color:'rgba(240,236,226,.32)'}}>{f.s}</div>
+                    </div>
+                  ))}
+                </div>
+              </RevealSection>
+
+              {/* Era scroll */}
+              <section id="eras" style={{padding:'0 44px 80px',maxWidth:1600,margin:'0 auto'}}>
+                <RevealSection>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:36,borderBottom:'1px solid rgba(255,255,255,.07)',paddingBottom:18}}>
+                    <div>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'4px',color:'rgba(200,184,154,.4)',marginBottom:7}}>EXPLORE BY ERA</div>
+                      <h2 style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:'clamp(26px,3.5vw,44px)',color:'#f0ece2'}}>시대별 스타일</h2>
+                    </div>
+                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'rgba(240,236,226,.2)',letterSpacing:2}}>{ERAS.length} ERAS</span>
+                  </div>
+                </RevealSection>
+                <div style={{display:'flex',gap:18,overflowX:'auto',paddingBottom:16,scrollbarWidth:'none'}}>
+                  {ERAS.map((era,i)=>(
+                    <RevealSection key={era.id} delay={i*55}>
+                      <EraCard era={era} onSelect={selectEra} active={activeEra===era.id}/>
+                    </RevealSection>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {/* ── ERA VIEW ── */}
+          {view==='era'&&currentEra&&(
+            <div ref={contentRef} style={{padding:'56px 44px',maxWidth:1400,margin:'0 auto',animation:'fI .5s ease'}}>
+              <BackBtn onClick={goHome}/>
+              <div style={{marginBottom:52}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'4px',color:currentEra.accent,marginBottom:10}}>{currentEra.label}</div>
+                <h2 style={{fontFamily:"'Playfair Display',serif",fontWeight:900,fontSize:'clamp(38px,5.5vw,76px)',color:'#f0ece2',lineHeight:.93,marginBottom:18}}>{currentEra.ko}</h2>
+                <p style={{fontFamily:"'Noto Sans KR'",fontSize:14,lineHeight:1.95,color:'rgba(240,236,226,.5)',maxWidth:580,marginBottom:22}}>{currentEra.desc}</p>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:28}}>
+                  {currentEra.keywords.map(k=>(
+                    <span key={k} style={{fontFamily:"'Noto Sans KR'",fontSize:11,border:`1px solid ${currentEra.accent}55`,color:currentEra.accent,padding:'4px 14px',borderRadius:20}}>{k}</span>
+                  ))}
+                </div>
+                {/* Palette */}
+                <div style={{display:'flex',gap:0,height:5,maxWidth:280,borderRadius:2,overflow:'hidden'}}>
+                  {currentEra.palette.map((c,i)=><div key={i} style={{flex:1,background:c}}/>)}
+                </div>
+              </div>
+              <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:'#f0ece2',marginBottom:20,fontWeight:600}}>시대 아이템</h3>
+              <div style={{columnCount:5,columnGap:14}}>
+                {currentEra.looks.map(look=>(
+                  <ItemCard key={look.id} item={look} onClick={pickItem}/>
+                ))}
+              </div>
+
+              {/* All eras carousel at bottom */}
+              <div style={{marginTop:70,borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:40}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:'3px',color:'rgba(240,236,226,.25)',marginBottom:22}}>OTHER ERAS</div>
+                <div style={{display:'flex',gap:16,overflowX:'auto',scrollbarWidth:'none'}}>
+                  {ERAS.filter(e=>e.id!==currentEra.id).map(era=>(
+                    <EraCard key={era.id} era={era} onSelect={selectEra} active={false}/>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── MATCH VIEW ── */}
+          {view==='match'&&profile&&(
+            <div ref={contentRef} style={{padding:'56px 44px',maxWidth:1400,margin:'0 auto',animation:'fI .5s ease'}}>
+              <BackBtn onClick={goHome}/>
+              {/* Inspiration */}
+              <div style={{display:'flex',gap:22,alignItems:'flex-start',borderBottom:'1px solid rgba(255,255,255,.07)',paddingBottom:36,marginBottom:36}}>
+                {profile.img
+                  ?<img src={profile.img} alt="inspiration" style={{width:86,height:112,objectFit:'cover',borderRadius:2}}/>
+                  :<div style={{width:86,height:86,borderRadius:2,background:tint(profile.colors[0]),border:'1px solid rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <div style={{width:50,height:50}}><Garment sil="dress" hex={profile.colors[0]}/></div>
+                  </div>}
+                <div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:'8.5px',letterSpacing:'3px',color:'rgba(240,236,226,.25)',marginBottom:5}}>YOUR INSPIRATION</div>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:'#f0ece2',marginBottom:10}}>{profile.vibe}</div>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                    {(profile.swatches||[]).slice(0,4).map((c,i)=>(
+                      <span key={i} style={{width:16,height:16,borderRadius:'50%',background:c,border:'1px solid rgba(255,255,255,.2)',display:'inline-block'}}/>
+                    ))}
+                    {profile.tags.map(t=>(
+                      <span key={t} style={{fontFamily:"'Noto Sans KR'",fontSize:11,border:`1px solid ${profile.accent||'#c8b89a'}50`,color:profile.accent||'#c8b89a',padding:'3px 12px',borderRadius:20}}>{STYLE_KO[t]}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <h2 style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:26,color:'#f0ece2',marginBottom:22}}>
+                닮은 아이템 <span style={{color:profile.accent||'#c8b89a'}}>{matches.length}</span>
+              </h2>
+              {matches.length===0
+                ?<p style={{fontFamily:"'Noto Sans KR'",color:'rgba(240,236,226,.35)',fontSize:14}}>매칭 아이템이 없습니다.</p>
+                :<div style={{columnCount:5,columnGap:14}}>
+                  {matches.map(({item,score})=><ItemCard key={item.id} item={item} match={score} onClick={pickItem}/>)}
+                </div>}
+            </div>
+          )}
+
+          <footer style={{marginTop:70,padding:'22px 44px',borderTop:'1px solid rgba(255,255,255,.05)',display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:2,color:'rgba(240,236,226,.18)'}}>ÉCHO — 시대를 관통하는 패션 아카이브 · 1920–2020</span>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9.5px',letterSpacing:2,color:'rgba(240,236,226,.18)'}}>POWERED BY CLAUDE VISION</span>
+          </footer>
+        </div>
+      );
+    }
+
+    /* ── Small components ── */
+    function Btn({children, onClick, primary}) {
+      const [hov,setHov]=useState(false);
+      return (
+        <button onClick={onClick}
+          onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+          style={{
+            background:primary?(hov?'#c8b89a':'#f0ece2'):'none',
+            color:primary?'#0a0a08':'#f0ece2',
+            border:primary?'none':'1px solid rgba(255,255,255,.25)',
+            cursor:'none',padding:'12px 28px',
+            fontFamily:"'DM Mono',monospace",fontSize:10,letterSpacing:'2px',borderRadius:'1px',
+            transform:hov?'translateY(-2px)':'none',
+            transition:'transform .2s,background .2s,border-color .2s',
+            ...((!primary&&hov)?{borderColor:'rgba(255,255,255,.65)'}:{}),
+          }}>{children}</button>
+      );
+    }
+    function BackBtn({onClick}) {
+      const [hov,setHov]=useState(false);
+      return (
+        <button onClick={onClick}
+          onMouseEnter={()=>hov||null} onMouseLeave={()=>null}
+          style={{
+            background:'none',border:'none',cursor:'none',padding:'0 0 32px',
+            fontFamily:"'DM Mono',monospace",fontSize:10,letterSpacing:2,
+            color:hov?'#c8b89a':'rgba(240,236,226,.35)',transition:'color .2s',
+            display:'block',
+          }}
+          onMouseEnterCapture={()=>null}
+          onMouseOver={e=>e.currentTarget.style.color='#c8b89a'}
+          onMouseOut={e=>e.currentTarget.style.color='rgba(240,236,226,.35)'}>
+          ← ARCHIVE
+        </button>
+      );
+    }
+    function Spinner() {
+      return <div style={{width:18,height:18,border:'2px solid rgba(200,184,154,.25)',borderTopColor:'#c8b89a',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
